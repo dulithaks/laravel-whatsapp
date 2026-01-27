@@ -20,17 +20,42 @@ A comprehensive Laravel package for integrating WhatsApp Cloud API. Send and rec
 ## Requirements
 
 - PHP 8.1 or higher
-- Laravel 10.x or 11.x
+- Laravel 10.x, 11.x, or 12.x
 - WhatsApp Business API access
 - Meta Business App with WhatsApp product
 
 ## Installation
 
-Install the package via Composer:
+### For Production (via Packagist)
+
+Once published to Packagist, install via Composer:
 
 ```bash
 composer require dulithaks/whatsapp
 ```
+
+### For Local Development
+
+If developing locally or using from the packages directory:
+
+1. Add the repository to your `composer.json`:
+
+```json
+"repositories": [
+    {
+        "type": "path",
+        "url": "packages/Duli/WhatsApp"
+    }
+]
+```
+
+2. Require the package:
+
+```bash
+composer require dulithaks/whatsapp:@dev
+```
+
+### Publish Configuration
 
 Publish the configuration file:
 
@@ -292,6 +317,39 @@ try {
 ```
 
 ## Testing
+
+### Quick Installation Test
+
+The package includes built-in test routes (enabled by default in development):
+
+```bash
+# Check package installation and configuration status
+http://yourdomain.test/test-whatsapp
+```
+
+This will show the package status and configuration.
+
+### Send Test Template Message
+
+To send a test message using the `hello_world` template (requires configuration):
+
+```bash
+# Sends hello_world template to the specified phone number
+http://yourdomain.test/send-whatsapp-test?phone=1234567890
+```
+
+**Note:** Replace `1234567890` with your phone number in international format (no + or 00).
+
+### Disable Test Routes in Production
+
+Test routes are automatically disabled in production (`APP_DEBUG=false`). To manually control:
+
+```env
+# In your .env file
+WHATSAPP_ENABLE_TEST_ROUTES=false
+```
+
+### Webhook Integration Testing
 
 To test webhook integration locally:
 
