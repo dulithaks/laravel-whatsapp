@@ -58,8 +58,8 @@ If installing from a local packages directory, add to your `composer.json`:
 ```json
 "repositories": [
     {
-        "type": "path",
-        "url": "packages/Duli/WhatsApp"
+        "type": "vcs",
+        "url": "https://github.com/dulithaks/laravel-whatsapp"
     }
 ]
 ```
