@@ -90,4 +90,15 @@ return [
         'prefix' => env('WHATSAPP_WEBHOOK_PREFIX', 'webhook'),
         'middleware' => ['api'],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Enable Test Routes
+    |--------------------------------------------------------------------------
+    |
+    | Enable or disable test routes for debugging.
+    | Set to false in production for security.
+    |
+    */
+    'enable_test_routes' => env('WHATSAPP_ENABLE_TEST_ROUTES', env('APP_DEBUG', false)),
 ];

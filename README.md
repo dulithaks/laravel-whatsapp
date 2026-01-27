@@ -320,21 +320,33 @@ try {
 
 ### Quick Installation Test
 
-After installation, verify the package is working:
+The package includes built-in test routes (enabled by default in development):
 
 ```bash
-# Visit this URL in your browser or use curl
+# Check package installation and configuration status
 http://yourdomain.test/test-whatsapp
 ```
 
 This will show the package status and configuration.
 
-### Send Test Message
+### Send Test Template Message
 
-To send a test message (requires configuration):
+To send a test message using the `hello_world` template (requires configuration):
 
 ```bash
+# Sends hello_world template to the specified phone number
 http://yourdomain.test/send-whatsapp-test?phone=1234567890
+```
+
+**Note:** Replace `1234567890` with your phone number in international format (no + or 00).
+
+### Disable Test Routes in Production
+
+Test routes are automatically disabled in production (`APP_DEBUG=false`). To manually control:
+
+```env
+# In your .env file
+WHATSAPP_ENABLE_TEST_ROUTES=false
 ```
 
 ### Webhook Integration Testing
