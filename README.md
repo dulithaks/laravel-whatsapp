@@ -438,7 +438,3 @@ For issues and questions:
 
 - [GitHub Issues](https://github.com/dulithaks/laravel-whatsapp/issues)
 - [Documentation](https://github.com/dulithaks/laravel-whatsapp/wiki)
-
-## Credits
-
-Developed by Duli K
