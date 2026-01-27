@@ -51,19 +51,34 @@ Before you begin, ensure you have:
 
 ## Step 2: Install Package
 
-### 2.1 Install via Composer
+### 2.1 Add Repository (Local Development Only)
+
+If installing from a local packages directory, add to your `composer.json`:
+
+```json
+"repositories": [
+    {
+        "type": "path",
+        "url": "packages/Duli/WhatsApp"
+    }
+]
+```
+
+### 2.2 Install via Composer
+
+For production (once published to Packagist):
 
 ```bash
 composer require dulithaks/whatsapp
 ```
 
-Or if using local development (packages folder):
+For local development:
 
 ```bash
-composer require duli/whatsapp:* --prefer-source
+composer require dulithaks/whatsapp:@dev
 ```
 
-### 2.2 Publish Configuration
+### 2.3 Publish Configuration
 
 ```bash
 php artisan vendor:publish --provider="Duli\WhatsApp\WhatsAppServiceProvider" --tag="config"
@@ -128,14 +143,34 @@ For **production**, use your domain (e.g., `https://yourdomain.com`)
 
 ## Step 5: Test Your Setup
 
-### 5.1 Test Sending a Message
+### 5.1 Verify Installation
 
-Create a test route in `routes/web.php`:
+The package automatically registers test routes. Visit:
+
+```
+http://yourdomain.test/test-whatsapp
+```
+
+This will verify the package is installed and show configuration status.
+
+### 5.2 Test Sending a Message
+
+Once you've added your credentials to `.env`, test sending a message:
+
+```
+http://yourdomain.test/send-whatsapp-test?phone=1234567890
+```
+
+Replace `1234567890` with your phone number in international format (no + or 00).
+
+### 5.3 Custom Test Route
+
+You can also create custom test routes in `routes/web.php`:
 
 ```php
 use Duli\WhatsApp\Facades\WhatsApp;
 
-Route::get('/test-whatsapp', function () {
+Route::get('/my-whatsapp-test', function () {
     try {
         $response = WhatsApp::sendMessage(
             '1234567890', // Replace with your phone number (international format, no +)
@@ -148,10 +183,6 @@ Route::get('/test-whatsapp', function () {
     }
 });
 ```
-
-Visit: `http://yourdomain.com/test-whatsapp`
-
-### 5.2 Test Webhook Reception
 
 1. Send a message to your WhatsApp Business number
 2. Check your logs:

@@ -20,17 +20,42 @@ A comprehensive Laravel package for integrating WhatsApp Cloud API. Send and rec
 ## Requirements
 
 - PHP 8.1 or higher
-- Laravel 10.x or 11.x
+- Laravel 10.x, 11.x, or 12.x
 - WhatsApp Business API access
 - Meta Business App with WhatsApp product
 
 ## Installation
 
-Install the package via Composer:
+### For Production (via Packagist)
+
+Once published to Packagist, install via Composer:
 
 ```bash
 composer require dulithaks/whatsapp
 ```
+
+### For Local Development
+
+If developing locally or using from the packages directory:
+
+1. Add the repository to your `composer.json`:
+
+```json
+"repositories": [
+    {
+        "type": "path",
+        "url": "packages/Duli/WhatsApp"
+    }
+]
+```
+
+2. Require the package:
+
+```bash
+composer require dulithaks/whatsapp:@dev
+```
+
+### Publish Configuration
 
 Publish the configuration file:
 
@@ -292,6 +317,27 @@ try {
 ```
 
 ## Testing
+
+### Quick Installation Test
+
+After installation, verify the package is working:
+
+```bash
+# Visit this URL in your browser or use curl
+http://yourdomain.test/test-whatsapp
+```
+
+This will show the package status and configuration.
+
+### Send Test Message
+
+To send a test message (requires configuration):
+
+```bash
+http://yourdomain.test/send-whatsapp-test?phone=1234567890
+```
+
+### Webhook Integration Testing
 
 To test webhook integration locally:
 
