@@ -378,9 +378,9 @@ Contributions are welcome! Please submit pull requests or open issues on GitHub.
 
 For issues and questions:
 
-- GitHub Issues: [your-repo-url]
-- Documentation: [your-docs-url]
+- [GitHub Issues](https://github.com/dulithaks/laravel-whatsapp/issues)
+- [Documentation](https://github.com/dulithaks/laravel-whatsapp/wiki)
 
 ## Credits
 
-Developed by Duli Thakshila
+Developed by Duli K
