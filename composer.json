@@ -1,5 +1,5 @@
 {
-    "name": "dulithaks/whatsapp",
+    "name": "dulithaks/laravel-whatsapp",
     "description": "WhatsApp Cloud API integration for Laravel - Send and receive messages, media, and handle webhooks",
     "type": "library",
     "license": "MIT",
