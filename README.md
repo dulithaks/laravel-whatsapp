@@ -43,8 +43,8 @@ If developing locally or using from the packages directory:
 ```json
 "repositories": [
     {
-        "type": "path",
-        "url": "packages/Duli/WhatsApp"
+        "type": "vcs",
+        "url": "https://github.com/dulithaks/laravel-whatsapp"
     }
 ]
 ```
@@ -52,7 +52,7 @@ If developing locally or using from the packages directory:
 2. Require the package:
 
 ```bash
-composer require dulithaks/whatsapp:@dev
+composer require dulithaks/laravel-whatsapp:v1.0.x
 ```
 
 ### Publish Configuration
