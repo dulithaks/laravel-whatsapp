@@ -3,7 +3,9 @@
 namespace Duli\WhatsApp;
 
 use Duli\WhatsApp\Exceptions\WhatsAppException;
+use Duli\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response;
 
 class WhatsAppService
@@ -355,8 +357,16 @@ class WhatsAppService
                 ->retry(config('whatsapp.retry_times', 3), config('whatsapp.retry_delay', 100))
                 ->post($this->apiUrl, $payload);
 
-            return $this->handleResponse($response);
+            $result = $this->handleResponse($response);
+
+            // Log outgoing message to database
+            $this->logOutgoingMessage($payload, $result);
+
+            return $result;
         } catch (\Exception $e) {
+            // Log failed message
+            $this->logOutgoingMessage($payload, null, 'failed');
+
             throw new WhatsAppException(
                 'Failed to send WhatsApp message: ' . $e->getMessage(),
                 $e->getCode()
@@ -387,6 +397,53 @@ class WhatsAppService
         }
 
         return $data;
+    }
+
+    /**
+     * Log outgoing message to database
+     * 
+     * @param array $payload Request payload
+     * @param array|null $response API response
+     * @param string $status Message status
+     */
+    protected function logOutgoingMessage(array $payload, ?array $response, string $status = 'sent'): void
+    {
+        try {
+            $messageType = $payload['type'] ?? 'unknown';
+            $body = null;
+
+            // Extract body based on type
+            if ($messageType === 'text') {
+                $body = $payload['text']['body'] ?? null;
+            } elseif (in_array($messageType, ['image', 'video', 'document', 'audio'])) {
+                $body = json_encode($payload[$messageType] ?? []);
+            } elseif ($messageType === 'location') {
+                $body = json_encode($payload['location'] ?? []);
+            } elseif ($messageType === 'template') {
+                $body = $payload['template']['name'] ?? null;
+            } elseif ($messageType === 'interactive') {
+                $body = json_encode($payload['interactive'] ?? []);
+            } elseif ($messageType === 'reaction') {
+                $body = json_encode($payload['reaction'] ?? []);
+            }
+
+            WhatsAppMessage::create([
+                'wa_message_id' => $response['messages'][0]['id'] ?? null,
+                'from_phone' => $this->phoneId,
+                'to_phone' => $payload['to'] ?? null,
+                'direction' => 'outgoing',
+                'message_type' => $messageType,
+                'body' => $body,
+                'status' => $status,
+                'payload' => [
+                    'request' => $payload,
+                    'response' => $response,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            // Silently fail logging to not interrupt message sending
+            Log::error('Failed to log WhatsApp message', ['error' => $e->getMessage()]);
+        }
     }
 
     /**
