@@ -173,11 +173,8 @@ class WhatsAppWebhookController
 
         Log::info('WhatsApp Message Received', $messageData);
 
-        // Fire an event or call a handler here
-        event(new WhatsAppMessageReceived($messageData));
-
         // Save incoming message to database
-        WhatsAppMessage::create([
+        $message = WhatsAppMessage::create([
             'wa_message_id' => $messageId,
             'from_phone' => $from,
             'to_phone' => $value['metadata']['display_phone_number'] ?? config('whatsapp.phone_id'),
@@ -187,6 +184,9 @@ class WhatsAppWebhookController
             'status' => 'delivered',
             'payload' => $messageData,
         ]);
+
+        // Fire event with the persisted model
+        event(new WhatsAppMessageReceived($message));
 
         // Optionally mark message as read
         if ($messageId && config('whatsapp.mark_messages_as_read', false)) {
@@ -223,14 +223,18 @@ class WhatsAppWebhookController
 
         Log::info('WhatsApp Message Status', $statusData);
 
-        // Fire an event or call a handler here
-        event(new WhatsAppMessageStatusUpdated($statusData));
-
         // Update message status in database
-        WhatsAppMessage::where('wa_message_id', $statusData['message_id'])
-            ->update([
+        $message = WhatsAppMessage::where('wa_message_id', $statusData['message_id'])
+            ->first();
+
+        if ($message) {
+            $message->update([
                 'status' => $statusData['status'],
                 'payload' => $statusData,
             ]);
+
+            // Fire event with the updated model
+            event(new WhatsAppMessageStatusUpdated($message));
+        }
     }
 }

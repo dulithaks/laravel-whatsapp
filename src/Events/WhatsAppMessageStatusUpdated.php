@@ -2,6 +2,7 @@
 
 namespace Duli\WhatsApp\Events;
 
+use Duli\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -10,15 +11,15 @@ class WhatsAppMessageStatusUpdated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public array $statusData;
+    public WhatsAppMessage $message;
 
     /**
      * Create a new event instance.
      *
-     * @param array $statusData
+     * @param WhatsAppMessage $message
      */
-    public function __construct(array $statusData)
+    public function __construct(WhatsAppMessage $message)
     {
-        $this->statusData = $statusData;
+        $this->message = $message;
     }
 }
