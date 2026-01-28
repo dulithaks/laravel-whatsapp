@@ -8,7 +8,7 @@ class WhatsAppServiceProvider extends ServiceProvider
 {
     public function register()
     {
-        $this->mergeConfigFrom(__DIR__.'/../config/whatsapp.php', 'whatsapp');
+        $this->mergeConfigFrom(__DIR__ . '/../config/whatsapp.php', 'whatsapp');
 
         $this->app->singleton(WhatsAppService::class, function () {
             return new WhatsAppService;
@@ -18,9 +18,11 @@ class WhatsAppServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->publishes([
-            __DIR__.'/../config/whatsapp.php' => config_path('whatsapp.php'),
+            __DIR__ . '/../config/whatsapp.php' => config_path('whatsapp.php'),
         ], 'config');
 
-        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
+        $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
+
+        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
     }
 }

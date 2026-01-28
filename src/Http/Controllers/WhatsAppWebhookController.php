@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Duli\WhatsApp\WhatsAppService;
 use Duli\WhatsApp\Events\WhatsAppMessageReceived;
 use Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated;
+use Duli\WhatsApp\Models\WhatsAppMessage;
 
 class WhatsAppWebhookController
 {
@@ -172,8 +173,20 @@ class WhatsAppWebhookController
 
         Log::info('WhatsApp Message Received', $messageData);
 
-        // Fire an event or call a handler here
-        event(new WhatsAppMessageReceived($messageData));
+        // Save incoming message to database
+        $message = WhatsAppMessage::create([
+            'wa_message_id' => $messageId,
+            'from_phone' => $from,
+            'to_phone' => $value['metadata']['display_phone_number'] ?? config('whatsapp.phone_id'),
+            'direction' => 'incoming',
+            'message_type' => $type,
+            'body' => $type === 'text' ? ($messageData['text'] ?? null) : json_encode($messageData),
+            'status' => 'delivered',
+            'payload' => $messageData,
+        ]);
+
+        // Fire event with the persisted model
+        event(new WhatsAppMessageReceived($message));
 
         // Optionally mark message as read
         if ($messageId && config('whatsapp.mark_messages_as_read', false)) {
@@ -210,7 +223,18 @@ class WhatsAppWebhookController
 
         Log::info('WhatsApp Message Status', $statusData);
 
-        // Fire an event or call a handler here
-        event(new WhatsAppMessageStatusUpdated($statusData));
+        // Update message status in database
+        $message = WhatsAppMessage::where('wa_message_id', $statusData['message_id'])
+            ->first();
+
+        if ($message) {
+            $message->update([
+                'status' => $statusData['status'],
+                'payload' => $statusData,
+            ]);
+
+            // Fire event with the updated model
+            event(new WhatsAppMessageStatusUpdated($message));
+        }
     }
 }
