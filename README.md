@@ -294,6 +294,54 @@ protected function handleStatus(array $status, array $value): void
 }
 ```
 
+## Events ✅
+
+The package dispatches two Laravel events when processing webhook payloads. These events provide convenient hooks for your application to react to incoming messages and status updates.
+
+- **Duli\WhatsApp\Events\WhatsAppMessageReceived**
+    - **When:** Fired inside `handleMessage()` for each incoming message in the webhook payload.
+    - **Payload:** Public property `array $messageData` containing keys like `message_id`, `from`, `timestamp`, `type`, `profile_name`, and type-specific data (`text`, `image`, `video`, `audio`, `document`, `location`, `contacts`, `interactive`, `button`, `reaction`).
+
+- **Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated**
+    - **When:** Fired inside `handleStatus()` for each message status update.
+    - **Payload:** Public property `array $statusData` containing keys like `message_id`, `recipient_id`, `status`, `timestamp`, and optionally `errors`.
+
+### How to listen 🔧
+
+Register listeners in your application's `EventServiceProvider`:
+
+```php
+protected $listen = [
+    \Duli\WhatsApp\Events\WhatsAppMessageReceived::class => [
+        \App\Listeners\HandleWhatsAppMessage::class,
+    ],
+    \Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated::class => [
+        \App\Listeners\HandleWhatsAppStatus::class,
+    ],
+];
+```
+
+Or use closure listeners in `boot()`:
+
+```php
+use Duli\WhatsApp\Events\WhatsAppMessageReceived;
+use Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated;
+use Illuminate\Support\Facades\Event;
+
+public function boot()
+{
+    Event::listen(WhatsAppMessageReceived::class, function ($event) {
+        // Access message: $event->messageData
+    });
+
+    Event::listen(WhatsAppMessageStatusUpdated::class, function ($event) {
+        // Access status: $event->statusData
+    });
+}
+```
+
+These events make it easy to process messages asynchronously (e.g., queue listeners) or route them into your application's domain logic.
+
 ## Error Handling
 
 All API calls throw `WhatsAppException` on failure:
