@@ -5,6 +5,8 @@ namespace Duli\WhatsApp\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Duli\WhatsApp\WhatsAppService;
+use Duli\WhatsApp\Events\WhatsAppMessageReceived;
+use Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated;
 
 class WhatsAppWebhookController
 {
@@ -171,7 +173,7 @@ class WhatsAppWebhookController
         Log::info('WhatsApp Message Received', $messageData);
 
         // Fire an event or call a handler here
-        // event(new WhatsAppMessageReceived($messageData));
+        event(new WhatsAppMessageReceived($messageData));
 
         // Optionally mark message as read
         if ($messageId && config('whatsapp.mark_messages_as_read', false)) {
@@ -209,6 +211,6 @@ class WhatsAppWebhookController
         Log::info('WhatsApp Message Status', $statusData);
 
         // Fire an event or call a handler here
-        // event(new WhatsAppMessageStatusUpdated($statusData));
+        event(new WhatsAppMessageStatusUpdated($statusData));
     }
 }
