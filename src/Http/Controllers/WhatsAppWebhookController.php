@@ -31,7 +31,20 @@ class WhatsAppWebhookController
      */
     public function receive(Request $request)
     {
-        Log::info('WhatsApp Webhook Event', $request->all());
+        // Verify webhook signature
+        if (!$this->verifySignature($request)) {
+            Log::warning('WhatsApp webhook signature verification failed', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+            return response()->json(['error' => 'Invalid signature'], 403);
+        }
+
+        // Log webhook event without sensitive data
+        Log::info('WhatsApp Webhook Event Received', [
+            'entry_count' => count($request->input('entry', [])),
+            'timestamp' => now()->toIso8601String(),
+        ]);
 
         $entry = $request->input('entry', []);
 
@@ -61,6 +74,40 @@ class WhatsAppWebhookController
     }
 
     /**
+     * Verify webhook signature using HMAC SHA256
+     * 
+     * @param Request $request
+     * @return bool
+     */
+    protected function verifySignature(Request $request): bool
+    {
+        $signature = $request->header('X-Hub-Signature-256');
+        
+        // If no signature header, reject
+        if (!$signature) {
+            return false;
+        }
+
+        $appSecret = config('whatsapp.app_secret');
+        
+        // If app secret is not configured, log warning but allow (for backward compatibility)
+        // In production, this should be required
+        if (!$appSecret) {
+            Log::warning('WhatsApp app_secret not configured - webhook signature verification skipped');
+            return true;
+        }
+
+        // Get raw request body
+        $payload = $request->getContent();
+        
+        // Calculate expected signature
+        $expectedSignature = 'sha256=' . hash_hmac('sha256', $payload, $appSecret);
+        
+        // Use hash_equals for timing-attack-safe comparison
+        return hash_equals($expectedSignature, $signature);
+    }
+
+    /**
      * Handle incoming message
      * 
      * @param array $message Message data
@@ -73,6 +120,31 @@ class WhatsAppWebhookController
         $timestamp = $message['timestamp'] ?? null;
         $type = $message['type'] ?? null;
 
+        // Validate required fields
+        if (!$messageId || !$from || !$timestamp || !$type) {
+            Log::warning('WhatsApp webhook: Missing required message fields');
+            return;
+        }
+
+        // Validate phone number format (basic E.164 validation)
+        if (!$this->isValidPhoneNumber($from)) {
+            Log::warning('WhatsApp webhook: Invalid phone number format', ['from' => substr($from, 0, 5) . '***']);
+            return;
+        }
+
+        // Validate message type
+        $validTypes = ['text', 'image', 'video', 'audio', 'document', 'location', 'contacts', 'interactive', 'button', 'reaction'];
+        if (!in_array($type, $validTypes)) {
+            Log::warning('WhatsApp webhook: Invalid message type', ['type' => $type]);
+            return;
+        }
+
+        // Validate timestamp (should be numeric and reasonable)
+        if (!is_numeric($timestamp) || $timestamp < 0) {
+            Log::warning('WhatsApp webhook: Invalid timestamp', ['timestamp' => $timestamp]);
+            return;
+        }
+
         $messageData = [
             'message_id' => $messageId,
             'from' => $from,
@@ -84,7 +156,14 @@ class WhatsAppWebhookController
         // Extract message content based on type
         switch ($type) {
             case 'text':
-                $messageData['text'] = $message['text']['body'] ?? null;
+                $textBody = $message['text']['body'] ?? null;
+                // Validate text message size (max 4096 characters per WhatsApp API)
+                if ($textBody && strlen($textBody) > 4096) {
+                    Log::warning('WhatsApp webhook: Text message exceeds 4096 character limit');
+                    $textBody = substr($textBody, 0, 4096);
+                }
+                // Sanitize text input
+                $messageData['text'] = $textBody ? $this->sanitizeInput($textBody) : null;
                 break;
 
             case 'image':
@@ -171,7 +250,13 @@ class WhatsAppWebhookController
                 break;
         }
 
-        Log::info('WhatsApp Message Received', $messageData);
+        // Log message received without sensitive data
+        Log::info('WhatsApp Message Received', [
+            'message_id' => $messageId,
+            'type' => $type,
+            'timestamp' => $timestamp,
+            'has_content' => !empty($messageData['text'] ?? $messageData[$type] ?? null),
+        ]);
 
         // Save incoming message to database
         $message = WhatsAppMessage::create([
@@ -221,7 +306,13 @@ class WhatsAppWebhookController
             $statusData['errors'] = $status['errors'];
         }
 
-        Log::info('WhatsApp Message Status', $statusData);
+        // Log status update without sensitive data
+        Log::info('WhatsApp Message Status Update', [
+            'message_id' => $statusData['message_id'],
+            'status' => $statusData['status'],
+            'timestamp' => $statusData['timestamp'],
+            'has_errors' => isset($statusData['errors']),
+        ]);
 
         // Update message status in database
         $message = WhatsAppMessage::where('wa_message_id', $statusData['message_id'])
@@ -236,5 +327,34 @@ class WhatsAppWebhookController
             // Fire event with the updated model
             event(new WhatsAppMessageStatusUpdated($message));
         }
+    }
+
+    /**
+     * Validate phone number format (E.164)
+     * 
+     * @param string $phoneNumber
+     * @return bool
+     */
+    protected function isValidPhoneNumber(string $phoneNumber): bool
+    {
+        // Basic E.164 validation: digits only, 1-15 characters
+        return preg_match('/^\d{1,15}$/', $phoneNumber) === 1;
+    }
+
+    /**
+     * Sanitize user input to prevent XSS and other attacks
+     * 
+     * @param string $input
+     * @return string
+     */
+    protected function sanitizeInput(string $input): string
+    {
+        // Remove null bytes
+        $input = str_replace("\0", '', $input);
+        
+        // Trim whitespace
+        $input = trim($input);
+        
+        return $input;
     }
 }

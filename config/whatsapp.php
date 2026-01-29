@@ -36,6 +36,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | App Secret
+    |--------------------------------------------------------------------------
+    |
+    | Your WhatsApp Business App Secret from Meta Business Manager.
+    | Used to verify webhook request signatures (X-Hub-Signature-256 header).
+    | This is critical for security - without it, webhooks cannot be verified.
+    |
+    */
+    'app_secret' => env('WHATSAPP_APP_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
     | API Version
     |--------------------------------------------------------------------------
     |
