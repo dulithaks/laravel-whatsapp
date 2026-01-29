@@ -6,7 +6,7 @@ This file contains example test routes that were removed from the package for se
 
 These routes expose the following security risks in production:
 - `/test-whatsapp` - Configuration disclosure (exposes WhatsApp configuration details)
-- `/send-whatsapp-test` - Send messages without authentication (allows unauthorized message sending)
+- `/send-whatsapp-test` - Unauthorized message sending (allows sending messages without authentication or authorization)
 
 ## Usage
 
@@ -99,19 +99,81 @@ If you want to use these routes in your application, consider protecting them wi
 // Only enable in non-production environments
 if (app()->environment('local', 'development')) {
     Route::middleware(['auth'])->group(function () {
-        // Add the test routes here
+        // Configuration Test Route
+        Route::get('/test-whatsapp', function () {
+            try {
+                if (!config('whatsapp.phone_id') || !config('whatsapp.token')) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'WhatsApp not configured. Please set WHATSAPP_PHONE_ID and WHATSAPP_TOKEN in .env'
+                    ], 500);
+                }
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'WhatsApp package installed successfully!',
+                    'config' => [
+                        'phone_id' => config('whatsapp.phone_id') ? 'Configured' : 'Not set',
+                        'token' => config('whatsapp.token') ? 'Configured' : 'Not set',
+                        'api_version' => config('whatsapp.api_version'),
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage()
+                ], 500);
+            }
+        })->name('whatsapp.test.status');
+
+        // Send Test Message Route
+        Route::get('/send-whatsapp-test', function () {
+            try {
+                $phone = request('phone');
+
+                if (!$phone) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Please provide phone parameter. Example: /send-whatsapp-test?phone=1234567890'
+                    ], 400);
+                }
+
+                $response = \Duli\WhatsApp\Facades\WhatsApp::sendTemplate(
+                    $phone,
+                    'hello_world',
+                    'en_US'
+                );
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'WhatsApp template message sent successfully!',
+                    'response' => $response
+                ]);
+            } catch (\Duli\WhatsApp\Exceptions\WhatsAppException $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage(),
+                    'error_code' => $e->getErrorCode(),
+                    'response' => $e->getResponse()
+                ], 500);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $e->getMessage()
+                ], 500);
+            }
+        })->name('whatsapp.test.send');
     });
 }
 ```
 
-Or use environment-based routing:
+Or use environment-based routing with admin authorization:
 
 ```php
 // In routes/api.php or routes/web.php
 if (config('app.env') !== 'production') {
-    // Add test routes here with appropriate middleware
     Route::middleware(['auth', 'admin'])->group(function () {
-        // Test routes
+        // Add the test routes shown in the examples above
     });
 }
 ```
