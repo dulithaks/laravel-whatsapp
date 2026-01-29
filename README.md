@@ -71,6 +71,7 @@ Add your WhatsApp credentials to your `.env` file:
 WHATSAPP_PHONE_ID=your_phone_number_id
 WHATSAPP_TOKEN=your_permanent_access_token
 WHATSAPP_VERIFY_TOKEN=your_webhook_verify_token
+WHATSAPP_APP_SECRET=your_app_secret_key
 WHATSAPP_API_VERSION=v20.0
 WHATSAPP_TIMEOUT=30
 WHATSAPP_RETRY_TIMES=3
@@ -83,7 +84,7 @@ WHATSAPP_MARK_AS_READ=false
 1. **Phone Number ID**: Find this in your Meta Business Manager > WhatsApp > API Setup
 2. **Access Token**: Generate a permanent token from Meta Business App > Settings > WhatsApp > Access Token
 3. **Verify Token**: Create a secure random string for webhook verification
-
+4. **App Secret**: Find this in your Meta Business App > Settings > Basic
 ## Usage
 
 ### Sending Messages
