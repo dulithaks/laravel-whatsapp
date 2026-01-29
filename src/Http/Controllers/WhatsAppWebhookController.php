@@ -13,6 +13,18 @@ class WhatsAppWebhookController
 {
     protected WhatsAppService $whatsapp;
 
+    /**
+     * Status hierarchy for preventing downgrades.
+     * Higher value = higher priority status.
+     */
+    private const STATUS_HIERARCHY = [
+        'pending' => 0,
+        'sent' => 1,
+        'delivered' => 2,
+        'read' => 3,
+        'failed' => 4,
+    ];
+
     public function __construct(WhatsAppService $whatsapp)
     {
         $this->whatsapp = $whatsapp;
@@ -370,13 +382,34 @@ class WhatsAppWebhookController
             ->first();
 
         if ($message) {
-            $message->update([
-                'status' => $statusData['status'],
-                'payload' => $statusData,
-            ]);
+            // Prevent status downgrades for incoming messages
+            // (e.g., don't override 'read' with 'delivered')
+            $shouldUpdate = true;
+            
+            if ($message->direction === 'incoming') {
+                $currentPriority = self::STATUS_HIERARCHY[$message->status] ?? -1;
+                $newPriority = self::STATUS_HIERARCHY[$statusData['status']] ?? -1;
+                
+                // Only update if new status has higher or equal priority
+                if ($currentPriority > $newPriority) {
+                    $shouldUpdate = false;
+                    Log::info('WhatsApp Status Downgrade Prevented', [
+                        'message_id' => $statusData['message_id'],
+                        'current_status' => $message->status,
+                        'attempted_status' => $statusData['status'],
+                    ]);
+                }
+            }
 
-            // Fire event with the updated model
-            event(new WhatsAppMessageStatusUpdated($message));
+            if ($shouldUpdate) {
+                $message->update([
+                    'status' => $statusData['status'],
+                    'payload' => $statusData,
+                ]);
+
+                // Fire event with the updated model
+                event(new WhatsAppMessageStatusUpdated($message));
+            }
         }
     }
 
