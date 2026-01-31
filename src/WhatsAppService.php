@@ -53,12 +53,16 @@ class WhatsAppService
      * @param string $template Template name
      * @param string $language Language code (default: en_US)
      * @param array $params Template body parameters (text values)
-     * @param array|null $header Optional header component ['type' => 'image|video|document', 'url' => 'https://...', 'media_id' => 'id']
-     * @param array $buttons Optional button payloads [['sub_type' => 'quick_reply', 'parameters' => [['type' => 'payload', 'payload' => 'YES_PAYLOAD']]], ...]
+     * @param array|null $header Optional header component 
+     *                           Example: ['type' => 'image', 'url' => 'https://example.com/image.jpg']
+     *                           Or: ['type' => 'video', 'media_id' => '12345']
+     * @param array $buttons Optional buttons
+     *                       Quick reply: [['sub_type' => 'quick_reply', 'payload' => 'YES_PAYLOAD']]
+     *                       URL button: [['sub_type' => 'url', 'text' => 'ORDER123']]
      * @return array Response from WhatsApp API
      * @throws WhatsAppException
      */
-    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null, ?array $buttons = []): array
+    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null, array $buttons = []): array
     {
         $components = [];
 
@@ -91,11 +95,29 @@ class WhatsAppService
 
         // Add button components if provided
         foreach ($buttons as $index => $button) {
+            $subType = $button['sub_type'] ?? 'quick_reply';
+
+            // Build parameters based on button sub_type
+            $parameters = [];
+            if ($subType === 'url') {
+                // URL buttons use text parameter
+                $parameters[] = [
+                    'type' => 'text',
+                    'text' => $button['text'] ?? '',
+                ];
+            } else {
+                // quick_reply buttons use payload parameter
+                $parameters[] = [
+                    'type' => 'payload',
+                    'payload' => $button['payload'] ?? '',
+                ];
+            }
+
             $components[] = [
                 'type' => 'button',
-                'sub_type' => $button['sub_type'] ?? 'quick_reply',
+                'sub_type' => $subType,
                 'index' => (string) $index,
-                'parameters' => $button['parameters'] ?? [],
+                'parameters' => $parameters,
             ];
         }
 
