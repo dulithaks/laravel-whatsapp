@@ -54,10 +54,11 @@ class WhatsAppService
      * @param string $language Language code (default: en_US)
      * @param array $params Template body parameters (text values)
      * @param array|null $header Optional header component ['type' => 'image|video|document', 'url' => 'https://...', 'media_id' => 'id']
+     * @param array $buttons Optional button payloads [['sub_type' => 'quick_reply', 'parameters' => [['type' => 'payload', 'payload' => 'YES_PAYLOAD']]], ...]
      * @return array Response from WhatsApp API
      * @throws WhatsAppException
      */
-    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null): array
+    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null, ?array $buttons = []): array
     {
         $components = [];
 
@@ -85,6 +86,16 @@ class WhatsAppService
                 'parameters' => collect($params)->map(function ($p) {
                     return ['type' => 'text', 'text' => $p];
                 })->toArray(),
+            ];
+        }
+
+        // Add button components if provided
+        foreach ($buttons as $index => $button) {
+            $components[] = [
+                'type' => 'button',
+                'sub_type' => $button['sub_type'] ?? 'quick_reply',
+                'index' => (string) $index,
+                'parameters' => $button['parameters'] ?? [],
             ];
         }
 
