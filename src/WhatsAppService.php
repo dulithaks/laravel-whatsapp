@@ -52,14 +52,33 @@ class WhatsAppService
      * @param string $to Phone number in international format
      * @param string $template Template name
      * @param string $language Language code (default: en_US)
-     * @param array $params Template parameters
+     * @param array $params Template body parameters (text values)
+     * @param array|null $header Optional header component ['type' => 'image|video|document', 'url' => 'https://...', 'media_id' => 'id']
      * @return array Response from WhatsApp API
      * @throws WhatsAppException
      */
-    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = []): array
+    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null): array
     {
         $components = [];
 
+        // Add header component if provided
+        if ($header) {
+            $headerType = $header['type'] ?? 'image';
+            $headerParam = ['type' => $headerType];
+
+            if (isset($header['media_id'])) {
+                $headerParam[$headerType] = ['id' => $header['media_id']];
+            } elseif (isset($header['url'])) {
+                $headerParam[$headerType] = ['link' => $header['url']];
+            }
+
+            $components[] = [
+                'type' => 'header',
+                'parameters' => [$headerParam],
+            ];
+        }
+
+        // Add body component if parameters provided
         if (!empty($params)) {
             $components[] = [
                 'type' => 'body',
