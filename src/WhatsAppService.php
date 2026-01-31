@@ -411,13 +411,17 @@ class WhatsAppService
 
             $result = $this->handleResponse($response);
 
-            // Log outgoing message to database
+            // Only log successful messages
             $this->logOutgoingMessage($payload, $result);
 
             return $result;
+        } catch (WhatsAppException $e) {
+            // Log API errors with error details
+            $this->logFailedMessage($payload, $e);
+            throw $e;
         } catch (\Exception $e) {
-            // Log failed message
-            $this->logOutgoingMessage($payload, null, 'failed');
+            // Log general failures
+            $this->logFailedMessage($payload, $e);
 
             throw new WhatsAppException(
                 'Failed to send WhatsApp message: ' . $e->getMessage(),
@@ -452,50 +456,95 @@ class WhatsAppService
     }
 
     /**
-     * Log outgoing message to database
+     * Log successful outgoing message to database
      * 
      * @param array $payload Request payload
-     * @param array|null $response API response
-     * @param string $status Message status
+     * @param array $response API response
      */
-    protected function logOutgoingMessage(array $payload, ?array $response, string $status = 'sent'): void
+    protected function logOutgoingMessage(array $payload, array $response): void
     {
         try {
-            $messageType = $payload['type'] ?? 'unknown';
-            $body = null;
-
-            // Extract body based on type
-            if ($messageType === 'text') {
-                $body = $payload['text']['body'] ?? null;
-            } elseif (in_array($messageType, ['image', 'video', 'document', 'audio'])) {
-                $body = json_encode($payload[$messageType] ?? []);
-            } elseif ($messageType === 'location') {
-                $body = json_encode($payload['location'] ?? []);
-            } elseif ($messageType === 'template') {
-                $body = $payload['template']['name'] ?? null;
-            } elseif ($messageType === 'interactive') {
-                $body = json_encode($payload['interactive'] ?? []);
-            } elseif ($messageType === 'reaction') {
-                $body = json_encode($payload['reaction'] ?? []);
-            }
-
             WhatsAppMessage::create([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,
                 'from_phone' => $this->phoneId,
                 'to_phone' => $payload['to'] ?? null,
                 'direction' => 'outgoing',
-                'message_type' => $messageType,
-                'body' => $body,
-                'status' => $status,
+                'message_type' => $payload['type'] ?? 'unknown',
+                'body' => $this->extractBody($payload),
+                'status' => 'sent',
                 'payload' => [
                     'request' => $payload,
                     'response' => $response,
                 ],
             ]);
         } catch (\Exception $e) {
-            // Silently fail logging to not interrupt message sending
-            Log::error('Failed to log WhatsApp message', ['error' => $e->getMessage()]);
+            Log::error('Failed to log WhatsApp message', [
+                'error' => $e->getMessage(),
+                'to' => $payload['to'] ?? null,
+            ]);
         }
+    }
+
+    /**
+     * Log failed message to database
+     * 
+     * @param array $payload Request payload
+     * @param \Exception $exception Exception that occurred
+     */
+    protected function logFailedMessage(array $payload, \Exception $exception): void
+    {
+        try {
+            WhatsAppMessage::create([
+                'wa_message_id' => null,
+                'from_phone' => $this->phoneId,
+                'to_phone' => $payload['to'] ?? null,
+                'direction' => 'outgoing',
+                'message_type' => $payload['type'] ?? 'unknown',
+                'body' => $this->extractBody($payload),
+                'status' => 'failed',
+                'payload' => [
+                    'request' => $payload,
+                    'error' => [
+                        'message' => $exception->getMessage(),
+                        'code' => $exception->getCode(),
+                        'type' => get_class($exception),
+                    ],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to log WhatsApp message', [
+                'error' => $e->getMessage(),
+                'original_error' => $exception->getMessage(),
+                'to' => $payload['to'] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Extract message body from payload based on message type
+     * 
+     * @param array $payload Request payload
+     * @return string|null Extracted message body
+     */
+    protected function extractBody(array $payload): ?string
+    {
+        $messageType = $payload['type'] ?? 'unknown';
+
+        if ($messageType === 'text') {
+            return $payload['text']['body'] ?? null;
+        } elseif (in_array($messageType, ['image', 'video', 'document', 'audio'])) {
+            return json_encode($payload[$messageType] ?? []);
+        } elseif ($messageType === 'location') {
+            return json_encode($payload['location'] ?? []);
+        } elseif ($messageType === 'template') {
+            return $payload['template']['name'] ?? null;
+        } elseif ($messageType === 'interactive') {
+            return json_encode($payload['interactive'] ?? []);
+        } elseif ($messageType === 'reaction') {
+            return json_encode($payload['reaction'] ?? []);
+        }
+
+        return null;
     }
 
     /**
