@@ -22,6 +22,11 @@ return new class extends Migration
             $table->enum('status', ['pending', 'sent', 'delivered', 'read', 'failed'])->default('pending')->index();
             $table->json('payload')->nullable(); // full request/response payload
             $table->timestamps();
+
+            // Composite indexes for common queries
+            $table->index(['status', 'created_at']);
+            $table->index(['to_phone', 'status']);
+            $table->index(['direction', 'status', 'created_at']);
         });
     }
 
