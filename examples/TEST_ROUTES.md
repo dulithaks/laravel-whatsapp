@@ -5,6 +5,7 @@ This file contains example test routes that were removed from the package for se
 ## Security Concerns
 
 These routes expose the following security risks in production:
+
 - `/test-whatsapp` - Configuration disclosure (exposes WhatsApp configuration details)
 - `/send-whatsapp-test` - Unauthorized message sending (allows sending messages without authentication or authorization)
 
@@ -263,6 +264,7 @@ Route::post('/test-whatsapp-upload-form', function () {
 ## Testing with cURL
 
 ### Upload from file path:
+
 ```bash
 curl -X POST "http://yourdomain.test/test-whatsapp-upload" \
   -d "phone=1234567890" \
@@ -270,6 +272,7 @@ curl -X POST "http://yourdomain.test/test-whatsapp-upload" \
 ```
 
 ### Upload from form:
+
 ```bash
 curl -X POST "http://yourdomain.test/test-whatsapp-upload-form" \
   -F "phone=1234567890" \
