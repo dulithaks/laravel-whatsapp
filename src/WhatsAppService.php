@@ -53,20 +53,69 @@ class WhatsAppService
      * @param string $to Phone number in international format
      * @param string $template Template name
      * @param string $language Language code (default: en_US)
-     * @param array $params Template parameters
+     * @param array $params Body text parameters (array of scalar values)
+     * @param array $header Optional header component descriptor.
+     *                      Shape: ['type' => 'image'|'document'|'video'|'text', 'id' => '...']
+     *                      Use 'id' for an uploaded media ID or 'url' for a public link.
+     *                      For text headers use 'text' => '...' instead.
+     * @param array $buttons Optional button components. Each entry:
+     *                       ['sub_type' => 'quick_reply'|'url', 'index' => 0, 'parameters' => [...]]
      * @return array Response from WhatsApp API
      * @throws WhatsAppException
      */
-    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = []): array
-    {
+    public function sendTemplate(
+        string $to,
+        string $template,
+        string $language = 'en_US',
+        array $params = [],
+        array $header = [],
+        array $buttons = []
+    ): array {
         $components = [];
 
+        // Build header component
+        if (!empty($header)) {
+            $headerParameter = ['type' => $header['type']];
+
+            if ($header['type'] === 'image') {
+                $headerParameter['image'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'document') {
+                $headerParameter['document'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'video') {
+                $headerParameter['video'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'text') {
+                $headerParameter['text'] = $header['text'];
+            }
+
+            $components[] = [
+                'type' => 'header',
+                'parameters' => [$headerParameter],
+            ];
+        }
+
+        // Build body component
         if (!empty($params)) {
             $components[] = [
                 'type' => 'body',
                 'parameters' => collect($params)->map(function ($p) {
-                    return ['type' => 'text', 'text' => $p];
+                    return ['type' => 'text', 'text' => (string) $p];
                 })->toArray(),
+            ];
+        }
+
+        // Build button components
+        foreach ($buttons as $index => $button) {
+            $components[] = [
+                'type' => 'button',
+                'sub_type' => $button['sub_type'] ?? 'quick_reply',
+                'index' => (string) ($button['index'] ?? $index),
+                'parameters' => $button['parameters'] ?? [],
             ];
         }
 
@@ -75,7 +124,7 @@ class WhatsAppService
             'to' => $to,
             'type' => 'template',
             'template' => [
-                'name'    => $template,
+                'name'     => $template,
                 'language' => ['code' => $language],
                 'components' => $components,
             ],
