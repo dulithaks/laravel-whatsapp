@@ -193,7 +193,7 @@ class WhatsAppService
      * @return string Media ID that can be used with sendImage()
      * @throws WhatsAppException
      */
-    public function uploadImage($file): string
+    public function uploadImage(string|UploadedFile $file): string
     {
         try {
             $fileData = $this->prepareFileForUpload($file);
