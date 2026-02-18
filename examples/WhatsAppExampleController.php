@@ -223,4 +223,119 @@ class WhatsAppExampleController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Upload an image and send it
+     * 
+     * Example: Upload from a local file path
+     */
+    public function uploadAndSendImage(Request $request)
+    {
+        try {
+            $phone = $request->input('phone');
+            $imagePath = $request->input('image_path'); // e.g., storage/app/images/product.jpg
+
+            // Upload and send in one call
+            $response = WhatsApp::uploadAndSendImage(
+                $phone,
+                $imagePath,
+                'Check out this image!'
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Image uploaded and sent',
+                'data' => $response
+            ]);
+        } catch (WhatsAppException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload and send image',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload an image from form request and send
+     * 
+     * Example: Handle image upload from a form
+     */
+    public function uploadFromRequest(Request $request)
+    {
+        try {
+            $request->validate([
+                'phone' => 'required|string',
+                'image' => 'required|image|max:5120', // max 5MB
+                'caption' => 'nullable|string|max:1024'
+            ]);
+
+            $phone = $request->input('phone');
+            $caption = $request->input('caption', 'Here is your image');
+
+            // Option 1: Upload and send in one call
+            $response = WhatsApp::uploadAndSendImage(
+                $phone,
+                $request->file('image'),
+                $caption
+            );
+
+            // Option 2: Upload first, then send (useful if you need the media ID)
+            // $mediaId = WhatsApp::uploadImage($request->file('image'));
+            // $response = WhatsApp::sendImage($phone, $mediaId, $caption, true);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Image uploaded and sent successfully',
+                'data' => $response
+            ]);
+        } catch (WhatsAppException $e) {
+            Log::error('Failed to upload image from request', [
+                'error' => $e->getMessage(),
+                'phone' => $request->input('phone'),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload image',
+                'error' => $e->getMessage()
+            ], 500);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        }
+    }
+
+    /**
+     * Upload image and get media ID for later use
+     * 
+     * Example: Upload image and store media ID in database
+     */
+    public function uploadImageOnly(Request $request)
+    {
+        try {
+            $request->validate([
+                'image' => 'required|image|max:5120'
+            ]);
+
+            // Upload and get media ID
+            $mediaId = WhatsApp::uploadImage($request->file('image'));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Image uploaded successfully',
+                'media_id' => $mediaId,
+                'note' => 'Media ID is valid for ~30 days and can be reused'
+            ]);
+        } catch (WhatsAppException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload image',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

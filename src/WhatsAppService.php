@@ -7,6 +7,7 @@ use Duli\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\UploadedFile;
 
 class WhatsAppService
 {
@@ -183,6 +184,62 @@ class WhatsAppService
             'type' => 'audio',
             'audio' => $audioData,
         ]);
+    }
+
+    /**
+     * Upload an image file and get media ID
+     * 
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @return string Media ID that can be used with sendImage()
+     * @throws WhatsAppException
+     */
+    public function uploadImage(string|UploadedFile $file): string
+    {
+        try {
+            $fileData = $this->prepareFileForUpload($file);
+
+            $mediaUrl = "https://graph.facebook.com/{$this->apiVersion}/{$this->phoneId}/media";
+
+            $response = Http::withToken($this->token)
+                ->timeout(config('whatsapp.timeout', 30))
+                ->retry(config('whatsapp.retry_times', 3), config('whatsapp.retry_delay', 100))
+                ->asMultipart()
+                ->attach('file', $fileData['content'], $fileData['filename'])
+                ->post($mediaUrl, [
+                    'messaging_product' => 'whatsapp',
+                    'type' => $fileData['mimeType'],
+                ]);
+
+            $result = $this->handleResponse($response);
+
+            if (!isset($result['id'])) {
+                throw new WhatsAppException('Failed to get media ID from upload response');
+            }
+
+            return $result['id'];
+        } catch (WhatsAppException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new WhatsAppException(
+                'Failed to upload image: ' . $e->getMessage(),
+                $e->getCode()
+            );
+        }
+    }
+
+    /**
+     * Upload and send an image in one call
+     * 
+     * @param string $to Phone number
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @param string|null $caption Optional caption
+     * @return array Response from WhatsApp API
+     * @throws WhatsAppException
+     */
+    public function uploadAndSendImage(string $to, $file, ?string $caption = null): array
+    {
+        $mediaId = $this->uploadImage($file);
+        return $this->sendImage($to, $mediaId, $caption, true);
     }
 
     /**
@@ -444,6 +501,54 @@ class WhatsAppService
             // Silently fail logging to not interrupt message sending
             Log::error('Failed to log WhatsApp message', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Prepare file for upload (validate and extract file data)
+     * 
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @return array ['content' => string, 'filename' => string, 'mimeType' => string]
+     * @throws WhatsAppException
+     */
+    protected function prepareFileForUpload($file): array
+    {
+        if ($file instanceof UploadedFile) {
+            // Handle Laravel UploadedFile
+            if (!$file->isValid()) {
+                throw new WhatsAppException('Invalid uploaded file');
+            }
+
+            $mimeType = $file->getMimeType();
+            if (!str_starts_with($mimeType, 'image/')) {
+                throw new WhatsAppException("File must be an image. Got: {$mimeType}");
+            }
+
+            return [
+                'content' => file_get_contents($file->getRealPath()),
+                'filename' => $file->getClientOriginalName(),
+                'mimeType' => $mimeType,
+            ];
+        }
+
+        // Handle file path (string)
+        if (!is_string($file)) {
+            throw new WhatsAppException('File must be a file path or UploadedFile instance');
+        }
+
+        if (!file_exists($file)) {
+            throw new WhatsAppException("File not found: {$file}");
+        }
+
+        $mimeType = mime_content_type($file);
+        if (!str_starts_with($mimeType, 'image/')) {
+            throw new WhatsAppException("File must be an image. Got: {$mimeType}");
+        }
+
+        return [
+            'content' => file_get_contents($file),
+            'filename' => basename($file),
+            'mimeType' => $mimeType,
+        ];
     }
 
     /**

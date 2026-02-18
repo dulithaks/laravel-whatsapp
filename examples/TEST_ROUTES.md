@@ -5,6 +5,7 @@ This file contains example test routes that were removed from the package for se
 ## Security Concerns
 
 These routes expose the following security risks in production:
+
 - `/test-whatsapp` - Configuration disclosure (exposes WhatsApp configuration details)
 - `/send-whatsapp-test` - Unauthorized message sending (allows sending messages without authentication or authorization)
 
@@ -165,6 +166,117 @@ if (app()->environment('local', 'development')) {
         })->name('whatsapp.test.send');
     });
 }
+```
+
+### 3. Upload Image Test Route
+
+This route tests image upload functionality:
+
+```php
+Route::post('/test-whatsapp-upload', function () {
+    try {
+        $phone = request('phone');
+        $imagePath = request('image_path');
+
+        if (!$phone) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Please provide phone parameter'
+            ], 400);
+        }
+
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Please provide valid image_path parameter'
+            ], 400);
+        }
+
+        // Upload and send image
+        $response = \Duli\WhatsApp\Facades\WhatsApp::uploadAndSendImage(
+            $phone,
+            $imagePath,
+            'Test image upload'
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Image uploaded and sent successfully!',
+            'response' => $response
+        ]);
+    } catch (\Duli\WhatsApp\Exceptions\WhatsAppException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'error_code' => $e->getErrorCode()
+        ], 500);
+    }
+})->name('whatsapp.test.upload');
+```
+
+### 4. Upload Image from Form Test Route
+
+This route handles image upload from a multipart form:
+
+```php
+Route::post('/test-whatsapp-upload-form', function () {
+    try {
+        request()->validate([
+            'phone' => 'required|string',
+            'image' => 'required|image|max:5120'
+        ]);
+
+        $phone = request('phone');
+        $image = request()->file('image');
+
+        // Upload and get media ID
+        $mediaId = \Duli\WhatsApp\Facades\WhatsApp::uploadImage($image);
+
+        // Send the uploaded image
+        $response = \Duli\WhatsApp\Facades\WhatsApp::sendImage(
+            $phone,
+            $mediaId,
+            'Uploaded via form',
+            true
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Image uploaded and sent successfully!',
+            'media_id' => $mediaId,
+            'response' => $response
+        ]);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Duli\WhatsApp\Exceptions\WhatsAppException $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+})->name('whatsapp.test.upload.form');
+```
+
+## Testing with cURL
+
+### Upload from file path:
+
+```bash
+curl -X POST "http://yourdomain.test/test-whatsapp-upload" \
+  -d "phone=1234567890" \
+  -d "image_path=/path/to/image.jpg"
+```
+
+### Upload from form:
+
+```bash
+curl -X POST "http://yourdomain.test/test-whatsapp-upload-form" \
+  -F "phone=1234567890" \
+  -F "image=@/path/to/image.jpg"
 ```
 
 Or use environment-based routing with admin authorization:
