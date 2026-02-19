@@ -16,7 +16,7 @@ class WhatsAppMessageStatusUpdated
     /** Status before this webhook arrived (e.g. 'sent'). */
     public string $oldStatus;
 
-    /** Status after this webhook (e.g. 'delivered', 'read', 'failed', 'deleted'). */
+    /** Status after this webhook (e.g. 'delivered', 'read', 'failed'). */
     public string $newStatus;
 
     /** Convenience: true when this is a delivery receipt. */
@@ -27,9 +27,6 @@ class WhatsAppMessageStatusUpdated
 
     /** Convenience: true when the message failed to deliver. */
     public bool $isFailed;
-
-    /** Convenience: true when the recipient deleted the message. */
-    public bool $isDeleted;
 
     /**
      * Create a new event instance.
@@ -46,6 +43,5 @@ class WhatsAppMessageStatusUpdated
         $this->isDelivered = $newStatus === 'delivered';
         $this->isRead      = $newStatus === 'read';
         $this->isFailed    = $newStatus === 'failed';
-        $this->isDeleted   = $newStatus === 'deleted';
     }
 }
