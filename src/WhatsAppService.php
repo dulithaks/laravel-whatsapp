@@ -411,18 +411,35 @@ class WhatsAppService
 
     /**
      * Mark a message as read
-     * 
+     *
+     * This calls the API directly without going through send() to avoid
+     * inserting a spurious outgoing message row in the database.
+     *
      * @param string $messageId Message ID from webhook
      * @return array
      * @throws WhatsAppException
      */
     public function markAsRead(string $messageId): array
     {
-        return $this->send([
-            'messaging_product' => 'whatsapp',
-            'status' => 'read',
-            'message_id' => $messageId,
-        ]);
+        try {
+            $response = Http::withToken($this->token)
+                ->timeout(config('whatsapp.timeout', 30))
+                ->retry(config('whatsapp.retry_times', 3), config('whatsapp.retry_delay', 100))
+                ->post($this->apiUrl, [
+                    'messaging_product' => 'whatsapp',
+                    'status' => 'read',
+                    'message_id' => $messageId,
+                ]);
+
+            return $this->handleResponse($response);
+        } catch (WhatsAppException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new WhatsAppException(
+                'Failed to mark message as read: ' . $e->getMessage(),
+                $e->getCode()
+            );
+        }
     }
 
     /**
