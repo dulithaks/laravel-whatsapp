@@ -382,34 +382,42 @@ class WhatsAppWebhookController
             ->first();
 
         if ($message) {
-            // Prevent status downgrades for incoming messages
-            // (e.g., don't override 'read' with 'delivered')
+            // Prevent status downgrades for OUTGOING messages
+            // (e.g., don't override 'read' with a late-arriving 'delivered')
+            // Meta only sends status webhooks for messages WE sent (outgoing)
             $shouldUpdate = true;
-            
-            if ($message->direction === 'incoming') {
+
+            if ($message->direction === 'outgoing') {
                 $currentPriority = self::STATUS_HIERARCHY[$message->status] ?? -1;
                 $newPriority = self::STATUS_HIERARCHY[$statusData['status']] ?? -1;
-                
+
                 // Only update if new status has higher or equal priority
                 if ($currentPriority > $newPriority) {
                     $shouldUpdate = false;
                     Log::info('WhatsApp Status Downgrade Prevented', [
-                        'message_id' => $statusData['message_id'],
-                        'current_status' => $message->status,
+                        'message_id'       => $statusData['message_id'],
+                        'current_status'   => $message->status,
                         'attempted_status' => $statusData['status'],
                     ]);
                 }
             }
 
             if ($shouldUpdate) {
+                $oldStatus = $message->status;
+
                 $message->update([
-                    'status' => $statusData['status'],
+                    'status'  => $statusData['status'],
                     'payload' => $statusData,
                 ]);
 
-                // Fire event with the updated model
-                event(new WhatsAppMessageStatusUpdated($message));
+                // Fire event with old and new status so listeners don't need an extra query
+                event(new WhatsAppMessageStatusUpdated($message, $oldStatus, $statusData['status']));
             }
+        } else {
+            Log::warning('WhatsApp Status Update: message not found in database', [
+                'wa_message_id' => $statusData['message_id'],
+                'status'        => $statusData['status'],
+            ]);
         }
     }
 
