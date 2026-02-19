@@ -23,6 +23,7 @@ class WhatsAppWebhookController
         'delivered' => 2,
         'read' => 3,
         'failed' => 4,
+        'deleted' => 5,
     ];
 
     public function __construct(WhatsAppService $whatsapp)
@@ -94,7 +95,7 @@ class WhatsAppWebhookController
     protected function verifySignature(Request $request): bool
     {
         $signature = $request->header('X-Hub-Signature-256');
-        
+
         // If no signature header, reject
         if (!$signature) {
             Log::error('WhatsApp webhook: Missing X-Hub-Signature-256 header');
@@ -102,7 +103,7 @@ class WhatsAppWebhookController
         }
 
         $appSecret = config('whatsapp.app_secret');
-        
+
         // If app secret is not configured, reject the request
         if (!$appSecret) {
             Log::error('WhatsApp webhook: app_secret not configured - cannot verify signature. Set WHATSAPP_APP_SECRET in your .env file');
@@ -111,10 +112,10 @@ class WhatsAppWebhookController
 
         // Get raw request body
         $payload = $request->getContent();
-        
+
         // Calculate expected signature
         $expectedSignature = 'sha256=' . hash_hmac('sha256', $payload, $appSecret);
-        
+
         // Use hash_equals for timing-attack-safe comparison
         return hash_equals($expectedSignature, $signature);
     }
@@ -162,8 +163,8 @@ class WhatsAppWebhookController
             'from' => $from,
             'timestamp' => $timestamp,
             'type' => $type,
-            'profile_name' => isset($value['contacts'][0]['profile']['name']) 
-                ? $this->sanitizeInput($value['contacts'][0]['profile']['name']) 
+            'profile_name' => isset($value['contacts'][0]['profile']['name'])
+                ? $this->sanitizeInput($value['contacts'][0]['profile']['name'])
                 : null,
         ];
 
@@ -185,8 +186,8 @@ class WhatsAppWebhookController
                     'id' => $message['image']['id'] ?? null,
                     'mime_type' => $message['image']['mime_type'] ?? null,
                     'sha256' => $message['image']['sha256'] ?? null,
-                    'caption' => isset($message['image']['caption']) 
-                        ? $this->sanitizeInput($message['image']['caption']) 
+                    'caption' => isset($message['image']['caption'])
+                        ? $this->sanitizeInput($message['image']['caption'])
                         : null,
                 ];
                 break;
@@ -196,8 +197,8 @@ class WhatsAppWebhookController
                     'id' => $message['video']['id'] ?? null,
                     'mime_type' => $message['video']['mime_type'] ?? null,
                     'sha256' => $message['video']['sha256'] ?? null,
-                    'caption' => isset($message['video']['caption']) 
-                        ? $this->sanitizeInput($message['video']['caption']) 
+                    'caption' => isset($message['video']['caption'])
+                        ? $this->sanitizeInput($message['video']['caption'])
                         : null,
                 ];
                 break;
@@ -215,11 +216,11 @@ class WhatsAppWebhookController
                     'id' => $message['document']['id'] ?? null,
                     'mime_type' => $message['document']['mime_type'] ?? null,
                     'sha256' => $message['document']['sha256'] ?? null,
-                    'filename' => isset($message['document']['filename']) 
-                        ? $this->sanitizeInput($message['document']['filename']) 
+                    'filename' => isset($message['document']['filename'])
+                        ? $this->sanitizeInput($message['document']['filename'])
                         : null,
-                    'caption' => isset($message['document']['caption']) 
-                        ? $this->sanitizeInput($message['document']['caption']) 
+                    'caption' => isset($message['document']['caption'])
+                        ? $this->sanitizeInput($message['document']['caption'])
                         : null,
                 ];
                 break;
@@ -228,11 +229,11 @@ class WhatsAppWebhookController
                 $messageData['location'] = [
                     'latitude' => $message['location']['latitude'] ?? null,
                     'longitude' => $message['location']['longitude'] ?? null,
-                    'name' => isset($message['location']['name']) 
-                        ? $this->sanitizeInput($message['location']['name']) 
+                    'name' => isset($message['location']['name'])
+                        ? $this->sanitizeInput($message['location']['name'])
                         : null,
-                    'address' => isset($message['location']['address']) 
-                        ? $this->sanitizeInput($message['location']['address']) 
+                    'address' => isset($message['location']['address'])
+                        ? $this->sanitizeInput($message['location']['address'])
                         : null,
                 ];
                 break;
@@ -250,18 +251,18 @@ class WhatsAppWebhookController
                 if ($interactive['type'] === 'button_reply') {
                     $messageData['interactive']['button_reply'] = [
                         'id' => $interactive['button_reply']['id'] ?? null,
-                        'title' => isset($interactive['button_reply']['title']) 
-                            ? $this->sanitizeInput($interactive['button_reply']['title']) 
+                        'title' => isset($interactive['button_reply']['title'])
+                            ? $this->sanitizeInput($interactive['button_reply']['title'])
                             : null,
                     ];
                 } elseif ($interactive['type'] === 'list_reply') {
                     $messageData['interactive']['list_reply'] = [
                         'id' => $interactive['list_reply']['id'] ?? null,
-                        'title' => isset($interactive['list_reply']['title']) 
-                            ? $this->sanitizeInput($interactive['list_reply']['title']) 
+                        'title' => isset($interactive['list_reply']['title'])
+                            ? $this->sanitizeInput($interactive['list_reply']['title'])
                             : null,
-                        'description' => isset($interactive['list_reply']['description']) 
-                            ? $this->sanitizeInput($interactive['list_reply']['description']) 
+                        'description' => isset($interactive['list_reply']['description'])
+                            ? $this->sanitizeInput($interactive['list_reply']['description'])
                             : null,
                     ];
                 }
@@ -269,11 +270,11 @@ class WhatsAppWebhookController
 
             case 'button':
                 $messageData['button'] = [
-                    'text' => isset($message['button']['text']) 
-                        ? $this->sanitizeInput($message['button']['text']) 
+                    'text' => isset($message['button']['text'])
+                        ? $this->sanitizeInput($message['button']['text'])
                         : null,
-                    'payload' => isset($message['button']['payload']) 
-                        ? $this->sanitizeInput($message['button']['payload']) 
+                    'payload' => isset($message['button']['payload'])
+                        ? $this->sanitizeInput($message['button']['payload'])
                         : null,
                 ];
                 break;
@@ -281,8 +282,8 @@ class WhatsAppWebhookController
             case 'reaction':
                 $messageData['reaction'] = [
                     'message_id' => $message['reaction']['message_id'] ?? null,
-                    'emoji' => isset($message['reaction']['emoji']) 
-                        ? $this->sanitizeInput($message['reaction']['emoji']) 
+                    'emoji' => isset($message['reaction']['emoji'])
+                        ? $this->sanitizeInput($message['reaction']['emoji'])
                         : null,
                 ];
                 break;
@@ -352,7 +353,7 @@ class WhatsAppWebhookController
         }
 
         // Validate status value
-        $validStatuses = ['sent', 'delivered', 'read', 'failed'];
+        $validStatuses = ['sent', 'delivered', 'read', 'failed', 'deleted'];
         if (!in_array($statusData['status'], $validStatuses)) {
             Log::warning('WhatsApp webhook: Invalid status value', ['status' => $statusData['status']]);
             return;
@@ -369,6 +370,24 @@ class WhatsAppWebhookController
             $statusData['errors'] = $status['errors'];
         }
 
+        // Capture conversation metadata (id, expiration, origin type)
+        if (isset($status['conversation'])) {
+            $statusData['conversation'] = [
+                'id'                    => $status['conversation']['id'] ?? null,
+                'expiration_timestamp'  => $status['conversation']['expiration_timestamp'] ?? null,
+                'origin_type'           => $status['conversation']['origin']['type'] ?? null,
+            ];
+        }
+
+        // Capture pricing metadata (billable, pricing_model, category)
+        if (isset($status['pricing'])) {
+            $statusData['pricing'] = [
+                'billable'      => $status['pricing']['billable'] ?? null,
+                'pricing_model' => $status['pricing']['pricing_model'] ?? null,
+                'category'      => $status['pricing']['category'] ?? null,
+            ];
+        }
+
         // Log status update without sensitive data
         Log::info('WhatsApp Message Status Update', [
             'message_id' => $statusData['message_id'],
@@ -381,35 +400,47 @@ class WhatsAppWebhookController
         $message = WhatsAppMessage::where('wa_message_id', $statusData['message_id'])
             ->first();
 
-        if ($message) {
-            // Prevent status downgrades for incoming messages
-            // (e.g., don't override 'read' with 'delivered')
-            $shouldUpdate = true;
-            
-            if ($message->direction === 'incoming') {
-                $currentPriority = self::STATUS_HIERARCHY[$message->status] ?? -1;
-                $newPriority = self::STATUS_HIERARCHY[$statusData['status']] ?? -1;
-                
-                // Only update if new status has higher or equal priority
-                if ($currentPriority > $newPriority) {
-                    $shouldUpdate = false;
-                    Log::info('WhatsApp Status Downgrade Prevented', [
-                        'message_id' => $statusData['message_id'],
-                        'current_status' => $message->status,
-                        'attempted_status' => $statusData['status'],
-                    ]);
-                }
-            }
+        if (!$message) {
+            Log::warning('WhatsApp webhook: Received status update for unknown message', [
+                'message_id' => $statusData['message_id'],
+                'status'     => $statusData['status'],
+            ]);
+            return;
+        }
 
-            if ($shouldUpdate) {
-                $message->update([
-                    'status' => $statusData['status'],
-                    'payload' => $statusData,
+        // Prevent status downgrades for outgoing messages
+        // (e.g., don't override 'read' with a late-arriving 'delivered')
+        $shouldUpdate = true;
+        $oldStatus = $message->status;
+
+        if ($message->direction === 'outgoing') {
+            $currentPriority = self::STATUS_HIERARCHY[$message->status] ?? -1;
+            $newPriority = self::STATUS_HIERARCHY[$statusData['status']] ?? -1;
+
+            // Only update if new status has higher or equal priority
+            if ($currentPriority > $newPriority) {
+                $shouldUpdate = false;
+                Log::info('WhatsApp Status Downgrade Prevented', [
+                    'message_id'       => $statusData['message_id'],
+                    'current_status'   => $message->status,
+                    'attempted_status' => $statusData['status'],
                 ]);
-
-                // Fire event with the updated model
-                event(new WhatsAppMessageStatusUpdated($message));
             }
+        }
+
+        if ($shouldUpdate) {
+            $statusUpdatedAt = $statusData['timestamp']
+                ? \Carbon\Carbon::createFromTimestamp((int) $statusData['timestamp'])
+                : now();
+
+            $message->update([
+                'status'           => $statusData['status'],
+                'status_updated_at' => $statusUpdatedAt,
+                'payload'          => $statusData,
+            ]);
+
+            // Fire event carrying both old and new status
+            event(new WhatsAppMessageStatusUpdated($message, $oldStatus, $statusData['status']));
         }
     }
 
@@ -435,10 +466,10 @@ class WhatsAppWebhookController
     {
         // Remove null bytes
         $input = str_replace("\0", '', $input);
-        
+
         // Trim whitespace
         $input = trim($input);
-        
+
         return $input;
     }
 }
