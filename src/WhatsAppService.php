@@ -7,6 +7,7 @@ use Duli\WhatsApp\Models\WhatsAppMessage;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\Response;
+use Illuminate\Http\UploadedFile;
 
 class WhatsAppService
 {
@@ -52,72 +53,69 @@ class WhatsAppService
      * @param string $to Phone number in international format
      * @param string $template Template name
      * @param string $language Language code (default: en_US)
-     * @param array $params Template body parameters (text values)
-     * @param array|null $header Optional header component 
-     *                           Example: ['type' => 'image', 'url' => 'https://example.com/image.jpg']
-     *                           Or: ['type' => 'video', 'media_id' => '12345']
-     * @param array $buttons Optional buttons
-     *                       Quick reply: [['sub_type' => 'quick_reply', 'payload' => 'YES_PAYLOAD']]
-     *                       URL button: [['sub_type' => 'url', 'text' => 'ORDER123']]
+     * @param array $params Body text parameters (array of scalar values)
+     * @param array $header Optional header component descriptor.
+     *                      Shape: ['type' => 'image'|'document'|'video'|'text', 'id' => '...']
+     *                      Use 'id' for an uploaded media ID or 'url' for a public link.
+     *                      For text headers use 'text' => '...' instead.
+     * @param array $buttons Optional button components. Each entry:
+     *                       ['sub_type' => 'quick_reply'|'url', 'index' => 0, 'parameters' => [...]]
      * @return array Response from WhatsApp API
      * @throws WhatsAppException
      */
-    public function sendTemplate(string $to, string $template, string $language = 'en_US', array $params = [], ?array $header = null, array $buttons = []): array
-    {
+    public function sendTemplate(
+        string $to,
+        string $template,
+        string $language = 'en_US',
+        array $params = [],
+        array $header = [],
+        array $buttons = []
+    ): array {
         $components = [];
 
-        // Add header component if provided
-        if ($header) {
-            $headerType = $header['type'] ?? 'image';
-            $headerParam = ['type' => $headerType];
+        // Build header component
+        if (!empty($header)) {
+            $headerParameter = ['type' => $header['type']];
 
-            if (isset($header['media_id'])) {
-                $headerParam[$headerType] = ['id' => $header['media_id']];
-            } elseif (isset($header['url'])) {
-                $headerParam[$headerType] = ['link' => $header['url']];
+            if ($header['type'] === 'image') {
+                $headerParameter['image'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'document') {
+                $headerParameter['document'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'video') {
+                $headerParameter['video'] = isset($header['id'])
+                    ? ['id' => $header['id']]
+                    : ['link' => $header['url']];
+            } elseif ($header['type'] === 'text') {
+                $headerParameter['text'] = $header['text'];
             }
 
             $components[] = [
                 'type' => 'header',
-                'parameters' => [$headerParam],
+                'parameters' => [$headerParameter],
             ];
         }
 
-        // Add body component if parameters provided
+        // Build body component
         if (!empty($params)) {
             $components[] = [
                 'type' => 'body',
                 'parameters' => collect($params)->map(function ($p) {
-                    return ['type' => 'text', 'text' => $p];
+                    return ['type' => 'text', 'text' => (string) $p];
                 })->toArray(),
             ];
         }
 
-        // Add button components if provided
+        // Build button components
         foreach ($buttons as $index => $button) {
-            $subType = $button['sub_type'] ?? 'quick_reply';
-
-            // Build parameters based on button sub_type
-            $parameters = [];
-            if ($subType === 'url') {
-                // URL buttons use text parameter
-                $parameters[] = [
-                    'type' => 'text',
-                    'text' => $button['text'] ?? '',
-                ];
-            } else {
-                // quick_reply buttons use payload parameter
-                $parameters[] = [
-                    'type' => 'payload',
-                    'payload' => $button['payload'] ?? '',
-                ];
-            }
-
             $components[] = [
                 'type' => 'button',
-                'sub_type' => $subType,
-                'index' => (string) $index,
-                'parameters' => $parameters,
+                'sub_type' => $button['sub_type'] ?? 'quick_reply',
+                'index' => (string) ($button['index'] ?? $index),
+                'parameters' => $button['parameters'] ?? [],
             ];
         }
 
@@ -126,7 +124,7 @@ class WhatsAppService
             'to' => $to,
             'type' => 'template',
             'template' => [
-                'name'    => $template,
+                'name'     => $template,
                 'language' => ['code' => $language],
                 'components' => $components,
             ],
@@ -235,6 +233,62 @@ class WhatsAppService
             'type' => 'audio',
             'audio' => $audioData,
         ]);
+    }
+
+    /**
+     * Upload an image file and get media ID
+     * 
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @return string Media ID that can be used with sendImage()
+     * @throws WhatsAppException
+     */
+    public function uploadImage(string|UploadedFile $file): string
+    {
+        try {
+            $fileData = $this->prepareFileForUpload($file);
+
+            $mediaUrl = "https://graph.facebook.com/{$this->apiVersion}/{$this->phoneId}/media";
+
+            $response = Http::withToken($this->token)
+                ->timeout(config('whatsapp.timeout', 30))
+                ->retry(config('whatsapp.retry_times', 3), config('whatsapp.retry_delay', 100))
+                ->asMultipart()
+                ->attach('file', $fileData['content'], $fileData['filename'])
+                ->post($mediaUrl, [
+                    'messaging_product' => 'whatsapp',
+                    'type' => $fileData['mimeType'],
+                ]);
+
+            $result = $this->handleResponse($response);
+
+            if (!isset($result['id'])) {
+                throw new WhatsAppException('Failed to get media ID from upload response');
+            }
+
+            return $result['id'];
+        } catch (WhatsAppException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new WhatsAppException(
+                'Failed to upload image: ' . $e->getMessage(),
+                $e->getCode()
+            );
+        }
+    }
+
+    /**
+     * Upload and send an image in one call
+     * 
+     * @param string $to Phone number
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @param string|null $caption Optional caption
+     * @return array Response from WhatsApp API
+     * @throws WhatsAppException
+     */
+    public function uploadAndSendImage(string $to, $file, ?string $caption = null): array
+    {
+        $mediaId = $this->uploadImage($file);
+        return $this->sendImage($to, $mediaId, $caption, true);
     }
 
     /**
@@ -357,18 +411,35 @@ class WhatsAppService
 
     /**
      * Mark a message as read
-     * 
+     *
+     * This calls the API directly without going through send() to avoid
+     * inserting a spurious outgoing message row in the database.
+     *
      * @param string $messageId Message ID from webhook
      * @return array
      * @throws WhatsAppException
      */
     public function markAsRead(string $messageId): array
     {
-        return $this->send([
-            'messaging_product' => 'whatsapp',
-            'status' => 'read',
-            'message_id' => $messageId,
-        ]);
+        try {
+            $response = Http::withToken($this->token)
+                ->timeout(config('whatsapp.timeout', 30))
+                ->retry(config('whatsapp.retry_times', 3), config('whatsapp.retry_delay', 100))
+                ->post($this->apiUrl, [
+                    'messaging_product' => 'whatsapp',
+                    'status' => 'read',
+                    'message_id' => $messageId,
+                ]);
+
+            return $this->handleResponse($response);
+        } catch (WhatsAppException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            throw new WhatsAppException(
+                'Failed to mark message as read: ' . $e->getMessage(),
+                $e->getCode()
+            );
+        }
     }
 
     /**
@@ -411,17 +482,13 @@ class WhatsAppService
 
             $result = $this->handleResponse($response);
 
-            // Only log successful messages
+            // Log outgoing message to database
             $this->logOutgoingMessage($payload, $result);
 
             return $result;
-        } catch (WhatsAppException $e) {
-            // Log API errors with error details
-            $this->logFailedMessage($payload, $e);
-            throw $e;
         } catch (\Exception $e) {
-            // Log general failures
-            $this->logFailedMessage($payload, $e);
+            // Log failed message
+            $this->logOutgoingMessage($payload, null, 'failed');
 
             throw new WhatsAppException(
                 'Failed to send WhatsApp message: ' . $e->getMessage(),
@@ -456,95 +523,98 @@ class WhatsAppService
     }
 
     /**
-     * Log successful outgoing message to database
+     * Log outgoing message to database
      * 
      * @param array $payload Request payload
-     * @param array $response API response
+     * @param array|null $response API response
+     * @param string $status Message status
      */
-    protected function logOutgoingMessage(array $payload, array $response): void
+    protected function logOutgoingMessage(array $payload, ?array $response, string $status = 'sent'): void
     {
         try {
+            $messageType = $payload['type'] ?? 'unknown';
+            $body = null;
+
+            // Extract body based on type
+            if ($messageType === 'text') {
+                $body = $payload['text']['body'] ?? null;
+            } elseif (in_array($messageType, ['image', 'video', 'document', 'audio'])) {
+                $body = json_encode($payload[$messageType] ?? []);
+            } elseif ($messageType === 'location') {
+                $body = json_encode($payload['location'] ?? []);
+            } elseif ($messageType === 'template') {
+                $body = $payload['template']['name'] ?? null;
+            } elseif ($messageType === 'interactive') {
+                $body = json_encode($payload['interactive'] ?? []);
+            } elseif ($messageType === 'reaction') {
+                $body = json_encode($payload['reaction'] ?? []);
+            }
+
             WhatsAppMessage::create([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,
                 'from_phone' => $this->phoneId,
                 'to_phone' => $payload['to'] ?? null,
                 'direction' => 'outgoing',
-                'message_type' => $payload['type'] ?? 'unknown',
-                'body' => $this->extractBody($payload),
-                'status' => 'sent',
+                'message_type' => $messageType,
+                'body' => $body,
+                'status' => $status,
                 'payload' => [
                     'request' => $payload,
                     'response' => $response,
                 ],
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to log WhatsApp message', [
-                'error' => $e->getMessage(),
-                'to' => $payload['to'] ?? null,
-            ]);
+            // Silently fail logging to not interrupt message sending
+            Log::error('Failed to log WhatsApp message', ['error' => $e->getMessage()]);
         }
     }
 
     /**
-     * Log failed message to database
+     * Prepare file for upload (validate and extract file data)
      * 
-     * @param array $payload Request payload
-     * @param \Exception $exception Exception that occurred
+     * @param string|UploadedFile $file File path or UploadedFile instance
+     * @return array ['content' => string, 'filename' => string, 'mimeType' => string]
+     * @throws WhatsAppException
      */
-    protected function logFailedMessage(array $payload, \Exception $exception): void
+    protected function prepareFileForUpload($file): array
     {
-        try {
-            WhatsAppMessage::create([
-                'wa_message_id' => null,
-                'from_phone' => $this->phoneId,
-                'to_phone' => $payload['to'] ?? null,
-                'direction' => 'outgoing',
-                'message_type' => $payload['type'] ?? 'unknown',
-                'body' => $this->extractBody($payload),
-                'status' => 'failed',
-                'payload' => [
-                    'request' => $payload,
-                    'error' => [
-                        'message' => $exception->getMessage(),
-                        'code' => $exception->getCode(),
-                        'type' => get_class($exception),
-                    ],
-                ],
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to log WhatsApp message', [
-                'error' => $e->getMessage(),
-                'original_error' => $exception->getMessage(),
-                'to' => $payload['to'] ?? null,
-            ]);
-        }
-    }
+        if ($file instanceof UploadedFile) {
+            // Handle Laravel UploadedFile
+            if (!$file->isValid()) {
+                throw new WhatsAppException('Invalid uploaded file');
+            }
 
-    /**
-     * Extract message body from payload based on message type
-     * 
-     * @param array $payload Request payload
-     * @return string|null Extracted message body
-     */
-    protected function extractBody(array $payload): ?string
-    {
-        $messageType = $payload['type'] ?? 'unknown';
+            $mimeType = $file->getMimeType();
+            if (!str_starts_with($mimeType, 'image/')) {
+                throw new WhatsAppException("File must be an image. Got: {$mimeType}");
+            }
 
-        if ($messageType === 'text') {
-            return $payload['text']['body'] ?? null;
-        } elseif (in_array($messageType, ['image', 'video', 'document', 'audio'])) {
-            return json_encode($payload[$messageType] ?? []);
-        } elseif ($messageType === 'location') {
-            return json_encode($payload['location'] ?? []);
-        } elseif ($messageType === 'template') {
-            return $payload['template']['name'] ?? null;
-        } elseif ($messageType === 'interactive') {
-            return json_encode($payload['interactive'] ?? []);
-        } elseif ($messageType === 'reaction') {
-            return json_encode($payload['reaction'] ?? []);
+            return [
+                'content' => file_get_contents($file->getRealPath()),
+                'filename' => $file->getClientOriginalName(),
+                'mimeType' => $mimeType,
+            ];
         }
 
-        return null;
+        // Handle file path (string)
+        if (!is_string($file)) {
+            throw new WhatsAppException('File must be a file path or UploadedFile instance');
+        }
+
+        if (!file_exists($file)) {
+            throw new WhatsAppException("File not found: {$file}");
+        }
+
+        $mimeType = mime_content_type($file);
+        if (!str_starts_with($mimeType, 'image/')) {
+            throw new WhatsAppException("File must be an image. Got: {$mimeType}");
+        }
+
+        return [
+            'content' => file_get_contents($file),
+            'filename' => basename($file),
+            'mimeType' => $mimeType,
+        ];
     }
 
     /**

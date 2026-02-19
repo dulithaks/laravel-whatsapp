@@ -6,6 +6,7 @@ A comprehensive Laravel package for integrating WhatsApp Cloud API. Send and rec
 
 - ✅ Send text messages with URL previews
 - ✅ Send media (images, videos, documents, audio)
+- ✅ Upload images directly and get media IDs
 - ✅ Send locations
 - ✅ Send template messages
 - ✅ Send interactive buttons and lists
@@ -85,6 +86,7 @@ WHATSAPP_MARK_AS_READ=false
 2. **Access Token**: Generate a permanent token from Meta Business App > Settings > WhatsApp > Access Token
 3. **Verify Token**: Create a secure random string for webhook verification
 4. **App Secret**: Find this in your Meta Business App > Settings > Basic
+
 ## Usage
 
 ### Sending Messages
@@ -139,6 +141,37 @@ WhatsApp::sendAudio('1234567890', 'https://example.com/audio.mp3');
 // Send using media ID (after uploading)
 WhatsApp::sendImage('1234567890', 'media_id_here', null, true);
 ```
+
+#### Upload and Send Media
+
+Upload images directly to WhatsApp and get a media ID, or upload and send in one call:
+
+```php
+// Upload image from file path and get media ID
+$mediaId = WhatsApp::uploadImage('/path/to/image.jpg');
+
+// Use the media ID to send image
+WhatsApp::sendImage('1234567890', $mediaId, 'Caption here', true);
+
+// Or upload and send in one call
+WhatsApp::uploadAndSendImage('1234567890', '/path/to/image.jpg', 'Caption here');
+
+// Upload from Laravel request (form upload)
+use Illuminate\Http\Request;
+
+public function handleUpload(Request $request)
+{
+    $request->validate(['image' => 'required|image']);
+
+    // Upload and get media ID
+    $mediaId = WhatsApp::uploadImage($request->file('image'));
+
+    // Or upload and send directly
+    WhatsApp::uploadAndSendImage('1234567890', $request->file('image'), 'Photo from upload');
+}
+```
+
+**Note:** Media IDs are temporary and typically expire after 30 days. Uploaded media is stored on Meta's servers and can be reused multiple times before expiration.
 
 #### Location Messages
 
@@ -300,12 +333,12 @@ protected function handleStatus(array $status, array $value): void
 The package dispatches two Laravel events when processing webhook payloads. These events provide convenient hooks for your application to react to incoming messages and status updates.
 
 - **Duli\WhatsApp\Events\WhatsAppMessageReceived**
-    - **When:** Fired inside `handleMessage()` for each incoming message in the webhook payload.
-    - **Payload:** Public property `array $messageData` containing keys like `message_id`, `from`, `timestamp`, `type`, `profile_name`, and type-specific data (`text`, `image`, `video`, `audio`, `document`, `location`, `contacts`, `interactive`, `button`, `reaction`).
+  - **When:** Fired inside `handleMessage()` for each incoming message in the webhook payload.
+  - **Payload:** Public property `array $messageData` containing keys like `message_id`, `from`, `timestamp`, `type`, `profile_name`, and type-specific data (`text`, `image`, `video`, `audio`, `document`, `location`, `contacts`, `interactive`, `button`, `reaction`).
 
 - **Duli\WhatsApp\Events\WhatsAppMessageStatusUpdated**
-    - **When:** Fired inside `handleStatus()` for each message status update.
-    - **Payload:** Public property `array $statusData` containing keys like `message_id`, `recipient_id`, `status`, `timestamp`, and optionally `errors`.
+  - **When:** Fired inside `handleStatus()` for each message status update.
+  - **Payload:** Public property `array $statusData` containing keys like `message_id`, `recipient_id`, `status`, `timestamp`, and optionally `errors`.
 
 ### How to listen 🔧
 
@@ -404,16 +437,16 @@ To test webhook integration locally:
 
 1. Use ngrok or similar tool to expose your local server:
 
-    ```bash
-    ngrok http 80
-    ```
+   ```bash
+   ngrok http 80
+   ```
 
 2. Configure the ngrok URL in Meta Business Manager
 
 3. Monitor logs:
-    ```bash
-    tail -f storage/logs/laravel.log
-    ```
+   ```bash
+   tail -f storage/logs/laravel.log
+   ```
 
 ## Advanced Configuration
 
