@@ -16,11 +16,13 @@ class WhatsAppMessage extends Model
         'message_type',
         'body',
         'status',
+        'status_updated_at',
         'payload',
     ];
 
     protected $casts = [
-        'payload' => 'array',
+        'payload'           => 'array',
+        'status_updated_at' => 'datetime',
     ];
 
     /**
