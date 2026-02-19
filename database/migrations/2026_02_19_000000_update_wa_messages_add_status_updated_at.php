@@ -15,7 +15,7 @@ return new class extends Migration
         Schema::table('wa_messages', function (Blueprint $table) {
             // Records the exact timestamp WhatsApp reported the last status change.
             // Populated from the 'timestamp' field in the status webhook payload.
-            $table->timestamp('status_updated_at')->nullable()->after('status');
+            $table->timestamp('status_updated_at')->nullable();
         });
 
         // Extend the status enum to include 'deleted'
