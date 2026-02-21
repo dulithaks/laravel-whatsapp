@@ -483,16 +483,21 @@ class WhatsAppService
             $result = $this->handleResponse($response);
 
             // Log outgoing message to database
-            $this->logOutgoingMessage($payload, $result);
+            $dbId = $this->logOutgoingMessage($payload, $result);
+
+            if ($dbId !== null) {
+                $result['wa_db_id'] = $dbId;
+            }
 
             return $result;
         } catch (\Exception $e) {
             // Log failed message
-            $this->logOutgoingMessage($payload, null, 'failed');
+            $dbId = $this->logOutgoingMessage($payload, null, 'failed');
 
             throw new WhatsAppException(
                 'Failed to send WhatsApp message: ' . $e->getMessage(),
-                $e->getCode()
+                $e->getCode(),
+                array_filter(['wa_db_id' => $dbId])
             );
         }
     }
@@ -528,8 +533,9 @@ class WhatsAppService
      * @param array $payload Request payload
      * @param array|null $response API response
      * @param string $status Message status
+     * @return int|null The database record ID, or null if logging failed
      */
-    protected function logOutgoingMessage(array $payload, ?array $response, string $status = 'sent'): void
+    protected function logOutgoingMessage(array $payload, ?array $response, string $status = 'sent'): ?int
     {
         try {
             $messageType = $payload['type'] ?? 'unknown';
@@ -550,7 +556,7 @@ class WhatsAppService
                 $body = json_encode($payload['reaction'] ?? []);
             }
 
-            WhatsAppMessage::create([
+            $record = WhatsAppMessage::create([
                 'wa_message_id' => $response['messages'][0]['id'] ?? null,
                 'from_phone' => $this->phoneId,
                 'to_phone' => $payload['to'] ?? null,
@@ -563,9 +569,13 @@ class WhatsAppService
                     'response' => $response,
                 ],
             ]);
+
+            return $record->id;
         } catch (\Exception $e) {
             // Silently fail logging to not interrupt message sending
             Log::error('Failed to log WhatsApp message', ['error' => $e->getMessage()]);
+
+            return null;
         }
     }
 
