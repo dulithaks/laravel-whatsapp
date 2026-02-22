@@ -102,4 +102,25 @@ return [
         'prefix' => env('WHATSAPP_WEBHOOK_PREFIX', 'webhook'),
         'middleware' => ['api'],
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Incoming webhook payloads are processed through queued jobs so the HTTP
+    | response is returned to WhatsApp immediately (< 5 s), preventing the
+    | retry storm that causes delayed or missing messages.
+    |
+    | connection: Set to a specific queue connection (e.g. 'redis', 'sqs').
+    |             Null falls back to your application's default connection.
+    | name:       The queue name / tube to push webhook jobs onto.
+    |             A dedicated queue (e.g. 'whatsapp') lets you prioritize
+    |             or scale workers independently.
+    |
+    */
+    'queue' => [
+        'connection' => env('WHATSAPP_QUEUE_CONNECTION', null),
+        'name'       => env('WHATSAPP_QUEUE_NAME', 'default'),
+    ],
 ];

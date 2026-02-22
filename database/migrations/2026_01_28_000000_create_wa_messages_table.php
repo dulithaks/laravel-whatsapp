@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('wa_messages', function (Blueprint $table) {
             $table->id();
-            $table->string('wa_message_id')->nullable()->index();
+            $table->string('wa_message_id')->nullable()->unique();
             $table->string('from_phone')->nullable()->index();
             $table->string('to_phone')->nullable()->index();
             $table->enum('direction', ['incoming', 'outgoing'])->index();
